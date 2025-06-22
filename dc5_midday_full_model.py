@@ -7,18 +7,26 @@ import pandas as pd
 # Helper functions for parsing manual filters
 # ==============================
 def strip_prefix(raw_name: str) -> str:
+    # Remove leading numbering like "1. " or "2) "
     return re.sub(r'^\s*\d+[\.)]\s*', '', raw_name).strip()
 
 def normalize_name(raw_name: str) -> str:
     s = unicodedata.normalize('NFKC', raw_name)
+    # Normalize comparison symbols
     s = s.replace('≥', '>=').replace('≤', '<=').replace('\u2265', '>=').replace('\u2264', '<=')
     s = s.replace('→', '->').replace('\u2192', '->')
     s = s.replace('–', '-').replace('—', '-')
+    # Remove zero-width / non-breaking spaces
     s = s.replace('\u200B', '').replace('\u00A0', ' ')
+    # Collapse whitespace
     s = re.sub(r'\s+', ' ', s)
     return s.strip().lower()
 
 def parse_manual_filters_txt(raw_text: str):
+    """
+    Parse the manual filters file. Returns (entries, skipped_blocks).
+    Each entry: {'name': normalized lowercase, 'name_raw': original cleaned name, 'type', 'logic', 'action'}
+    """
     entries = []
     skipped = []
     text = raw_text.replace("\r\n", "\n").replace("\r", "\n")
@@ -41,18 +49,18 @@ def parse_manual_filters_txt(raw_text: str):
         low = norm_ln.lower()
         if low.startswith('type:'):
             if current is None:
-                current = {'name': '', 'type': '', 'logic': '', 'action': ''}
+                current = {'name': '', 'name_raw': '', 'type': '', 'logic': '', 'action': ''}
             current['type'] = norm_ln.split(':', 1)[1].strip()
         elif low.startswith('logic:'):
             if current is None:
-                current = {'name': '', 'type': '', 'logic': '', 'action': ''}
+                current = {'name': '', 'name_raw': '', 'type': '', 'logic': '', 'action': ''}
             after = norm_ln.split(':', 1)[1].strip()
             if after.lower().startswith('logic:'):
                 after = after.split(':', 1)[1].strip()
             current['logic'] = after
         elif low.startswith('action:'):
             if current is None:
-                current = {'name': '', 'type': '', 'logic': '', 'action': ''}
+                current = {'name': '', 'name_raw': '', 'type': '', 'logic': '', 'action': ''}
             current['action'] = norm_ln.split(':', 1)[1].strip()
         else:
             if current:
@@ -62,7 +70,7 @@ def parse_manual_filters_txt(raw_text: str):
                     skipped.append({'block': '\n'.join(raw_block[:-1])})
             clean = strip_prefix(norm_ln)
             name_norm = normalize_name(clean)
-            current = {'name': name_norm, 'type': '', 'logic': '', 'action': ''}
+            current = {'name': name_norm, 'name_raw': clean, 'type': '', 'logic': '', 'action': ''}
             raw_block = [raw_ln]
     if current:
         if current.get('name'):
@@ -76,38 +84,70 @@ def parse_manual_filters_txt(raw_text: str):
 # ==============================
 def seed_sum_matches_condition(seed_sum: int, condition_str: str) -> bool:
     s = condition_str.strip()
-    # Examples: '<=12', '13 or higher', '13-15', '12'
+    # <=N
     m = re.match(r'[≤<=]\s*(\d+)', s)
     if m:
-        return seed_sum <= int(m.group(1))
+        try:
+            return seed_sum <= int(m.group(1))
+        except:
+            return False
+    # >=N or higher
     m = re.match(r'(?:≥|>=)\s*(\d+)\s*or\s*higher', s, re.IGNORECASE)
     if m:
-        return seed_sum >= int(m.group(1))
-    m = re.match(r'(\d+)\s*[–-]\s*(\d+)', s)
+        try:
+            return seed_sum >= int(m.group(1))
+        except:
+            return False
+    # Range X-Y
+    m = re.match(r'(\d+)\s*[–\-]\s*(\d+)', s)
     if m:
-        low, high = int(m.group(1)), int(m.group(2)); return low <= seed_sum <= high
-    if s.isdigit(): return seed_sum == int(s)
+        try:
+            low, high = int(m.group(1)), int(m.group(2))
+            return low <= seed_sum <= high
+        except:
+            return False
+    if s.isdigit():
+        try:
+            return seed_sum == int(s)
+        except:
+            return False
     return False
 
 def apply_sum_range_filter(combos, min_sum, max_sum):
-    keep = [c for c in combos if min_sum <= sum(int(d) for d in c) <= max_sum]
+    try:
+        keep = [c for c in combos if min_sum <= sum(int(d) for d in c) <= max_sum]
+    except:
+        keep = combos[:]
     removed = [c for c in combos if c not in keep]
     return keep, removed
 
 def apply_keep_sum_range_if_seed_sum(combos, seed_sum, min_sum, max_sum, seed_condition_str):
-    if seed_sum_matches_condition(seed_sum, seed_condition_str):
-        return apply_sum_range_filter(combos, min_sum, max_sum)
-    else:
+    try:
+        if seed_sum_matches_condition(seed_sum, seed_condition_str):
+            return apply_sum_range_filter(combos, min_sum, max_sum)
+        else:
+            return combos, []
+    except:
         return combos, []
 
 def apply_conditional_seed_contains(combos, seed_digits, seed_digit, required_winners):
-    if seed_digit in seed_digits:
-        keep, removed = [], []
-        for c in combos:
-            if any(str(d) in c for d in required_winners): keep.append(c)
-            else: removed.append(c)
-        return keep, removed
-    return combos, []
+    try:
+        if seed_digit in seed_digits:
+            keep, removed = [], []
+            for c in combos:
+                found = False
+                for rw in required_winners:
+                    if str(rw) in c:
+                        found = True
+                        break
+                if found:
+                    keep.append(c)
+                else:
+                    removed.append(c)
+            return keep, removed
+        return combos, []
+    except:
+        return combos, []
 
 # ==============================
 # Generate combinations
@@ -116,33 +156,32 @@ def generate_combinations(seed, method="2-digit pair"):
     all_digits = '0123456789'
     combos = set()
     seed_str = str(seed)
-    if len(seed_str) < 2:
+    if not seed_str.isdigit() or len(seed_str) < 2:
         return []
     if method == "1-digit":
         for d in seed_str:
             for p in product(all_digits, repeat=4):
-                combos.add(''.join(sorted(d + ''.join(p))))
+                combo = ''.join(sorted(d + ''.join(p)))
+                combos.add(combo)
     else:
         pairs = set(''.join(sorted((seed_str[i], seed_str[j]))) for i in range(len(seed_str)) for j in range(i+1, len(seed_str)))
         for pair in pairs:
             for p in product(all_digits, repeat=3):
-                combos.add(''.join(sorted(pair + ''.join(p))))
+                combo = ''.join(sorted(pair + ''.join(p)))
+                combos.add(combo)
     return sorted(combos)
 
 # ==============================
 # Streamlit App
 # ==============================
 
-# Debug: check sidebar active
+# Ensure sidebar appears
+st.sidebar.markdown("## Settings")
 try:
-    # If sidebar attribute exists, write debug
-    if hasattr(st, 'sidebar'):
-        st.sidebar.write("🔧 Debug: Sidebar is active")
-        st.sidebar.title("Settings")
+    st.sidebar.write("🔧 Debug: Sidebar is active")
 except Exception:
     pass
 
-# Main title
 st.title("DC-5 Midday Blind Predictor with External Aggressiveness Sorting and Custom Order")
 
 # Sidebar inputs
@@ -153,7 +192,7 @@ due_digits = [d for d in st.sidebar.text_input("Due digits (comma-separated):").
 method = st.sidebar.selectbox("Generation Method:", ["1-digit", "2-digit pair"])
 enable_trap = st.sidebar.checkbox("Enable Trap V3 Ranking")
 
-# Optional Trap V3 uploader
+# Trap V3 uploader
 trap_uploaded = st.sidebar.file_uploader("Upload Trap V3 model file (dc5_trapv3_model.py)", type=['py'])
 if trap_uploaded is not None:
     try:
@@ -161,9 +200,10 @@ if trap_uploaded is not None:
         with open('dc5_trapv3_model.py', 'wb') as f:
             f.write(content)
         st.sidebar.success("Saved Trap V3 model file.")
-        if 'dc5_trapv3_model' in globals(): importlib.reload(globals()['dc5_trapv3_model'])
+        if 'dc5_trapv3_model' in globals():
+            importlib.reload(globals()['dc5_trapv3_model'])
     except Exception as e:
-        st.sidebar.error(f"Failed saving Trap V3 model: {e}")
+        st.sidebar.error(f"Failed saving Trap V3 model file: {e}")
 
 # Load manual filters
 uploaded = st.sidebar.file_uploader("Upload manual filters file (TXT)", type=['txt'])
@@ -185,7 +225,8 @@ else:
                 st.sidebar.info(f"Loaded manual filters from {fname}")
             except Exception as e:
                 st.sidebar.error(f"Failed reading {fname}: {e}")
-        raw_manual = "\n\n".join(contents)
+        if contents:
+            raw_manual = "\n\n".join(contents)
     elif len(found) == 1:
         try:
             raw_manual = open(found[0], 'r', encoding='utf-8').read()
@@ -198,21 +239,27 @@ else:
 parsed_entries = []
 skipped_blocks = []
 if raw_manual:
-    parsed_entries, skipped_blocks = parse_manual_filters_txt(raw_manual)
+    try:
+        parsed_entries, skipped_blocks = parse_manual_filters_txt(raw_manual)
+    except Exception as e:
+        parsed_entries = []
+        skipped_blocks = []
+        st.sidebar.error(f"Error parsing manual filters: {e}")
     st.write(f"Parsed {len(parsed_entries)} manual filter blocks")
     if skipped_blocks:
         st.warning(f"{len(skipped_blocks)} blocks skipped due to missing name.")
         with st.expander("Skipped blocks"):
             for sb in skipped_blocks:
-                st.code(sb.get('block','')[:300] + ("..." if len(sb.get('block',''))>300 else ""))
+                blk = sb.get('block','')
+                st.code(blk[:300] + ("..." if len(blk)>300 else ""))
     if st.sidebar.checkbox("Show normalized filter names for debugging"):
         st.write("#### Parsed Filter Names:")
         for idx, pf in enumerate(parsed_entries):
-            st.write(f"{idx}: '{pf['name']}' | Type: '{pf.get('type','')}'")
+            st.write(f"{idx}: RAW='{pf.get('name_raw','')}' -> NORM='{pf.get('name','')}' | Type: '{pf.get('type','')}'")
 else:
     st.write("No manual filters loaded.")
 
-# Sidebar: Upload aggressiveness ranking CSV
+# Aggressiveness CSV
 agg_uploaded = st.sidebar.file_uploader("Upload aggressiveness CSV (columns 'filter' and 'score')", type=['csv'])
 
 def load_aggressiveness_map(csv_path=None, uploaded_file=None):
@@ -223,12 +270,14 @@ def load_aggressiveness_map(csv_path=None, uploaded_file=None):
             if 'filter' in df.columns and 'score' in df.columns:
                 for _, row in df.iterrows():
                     norm = normalize_name(str(row['filter']))
-                    try: score = int(row['score'])
-                    except: continue
+                    try:
+                        score = int(row['score'])
+                    except:
+                        continue
                     mapping[norm] = score
                 st.sidebar.success("Loaded aggressiveness mapping from uploaded CSV.")
             else:
-                st.sidebar.error(f"Uploaded CSV must have columns 'filter' and 'score'.")
+                st.sidebar.error("Uploaded CSV must have columns 'filter' and 'score'.")
         except Exception as e:
             st.sidebar.error(f"Failed loading uploaded aggressiveness CSV: {e}")
     elif csv_path and os.path.exists(csv_path):
@@ -237,8 +286,10 @@ def load_aggressiveness_map(csv_path=None, uploaded_file=None):
             if 'filter' in df.columns and 'score' in df.columns:
                 for _, row in df.iterrows():
                     norm = normalize_name(str(row['filter']))
-                    try: score = int(row['score'])
-                    except: continue
+                    try:
+                        score = int(row['score'])
+                    except:
+                        continue
                     mapping[norm] = score
                 st.sidebar.success(f"Loaded aggressiveness mapping from {csv_path}.")
             else:
@@ -247,12 +298,14 @@ def load_aggressiveness_map(csv_path=None, uploaded_file=None):
             st.sidebar.error(f"Failed loading aggressiveness CSV: {e}")
     return mapping
 
-# Sort filters by external aggressiveness map
 if parsed_entries:
     agg_map = load_aggressiveness_map(csv_path="filter_ranking.csv", uploaded_file=agg_uploaded)
     if agg_map:
-        parsed_entries.sort(key=lambda pf: agg_map.get(normalize_name(pf['name']), float('inf')))
-        st.sidebar.info("Manual filters sorted by external aggressiveness (least→most). If some filters missing scores they appear last.")
+        try:
+            parsed_entries.sort(key=lambda pf: agg_map.get(normalize_name(pf['name']), float('inf')))
+            st.sidebar.info("Manual filters sorted by external aggressiveness (least→most). Missing appear last.")
+        except Exception as e:
+            st.sidebar.error(f"Error sorting filters: {e}")
 
 # Apply filters
 session_pool = []
@@ -270,57 +323,82 @@ if seed:
     else:
         norm_special = ''
     for idx, pf in enumerate(parsed_entries):
-        label = pf['name'] or f"Filter {idx}"
+        raw_label = pf.get('name_raw','').strip()
+        label = re.sub(r"['\"\r\n]", " ", raw_label)[:50].strip() or f"Filter_{idx}"
         help_text = f"Type: {pf.get('type','')}\nLogic: {pf.get('logic','')}\nAction: {pf.get('action','')}"
         try:
             checked = st.sidebar.checkbox(label, key=f"filter_{idx}", help=help_text)
         except Exception:
-            checked = st.sidebar.checkbox(f"Filter {idx}", key=f"filter_{idx}", help=help_text)
+            st.sidebar.error(f"Skipping filter {idx} due to label error.")
+            continue
         if checked:
             any_filtered = True
-            logic = pf.get('logic','')
-            # Match sum-range logic
+            logic = pf.get('logic','') or ''
             m_sum = re.search(r'between\s*(\d+)\s*and\s*(\d+)', logic, re.IGNORECASE)
             if m_sum:
-                low, high = int(m_sum.group(1)), int(m_sum.group(2))
-                seed_sum = sum(int(d) for d in seed if d.isdigit())
-                m_cond = re.search(r'if the seed sum is\s*([^\.]+)', logic, re.IGNORECASE)
-                if m_cond:
-                    cond_str = m_cond.group(1).strip()
-                    keep, removed = apply_keep_sum_range_if_seed_sum(session_pool, seed_sum, low, high, cond_str)
-                else:
-                    keep, removed = apply_sum_range_filter(session_pool, low, high)
-                if norm_special and special_result is None:
-                    if norm_special in [''.join(sorted(c)) for c in session_pool] and norm_special not in [''.join(sorted(c)) for c in keep]:
-                        special_result = label
-                session_pool = keep
-                st.write(f"Filter '{label}' removed {len(removed)} combos.")
-                continue
-            # Match conditional seed contains logic
+                try:
+                    low, high = int(m_sum.group(1)), int(m_sum.group(2))
+                except:
+                    low, high = None, None
+                if low is not None:
+                    seed_sum = sum(int(d) for d in seed if d.isdigit())
+                    m_cond = re.search(r'if the seed sum is\s*([^\.]+)', logic, re.IGNORECASE)
+                    if m_cond:
+                        cond_str = m_cond.group(1).strip()
+                        keep, removed = apply_keep_sum_range_if_seed_sum(session_pool, seed_sum, low, high, cond_str)
+                    else:
+                        keep, removed = apply_sum_range_filter(session_pool, low, high)
+                    try:
+                        if norm_special and special_result is None:
+                            prev = {''.join(sorted(c)) for c in session_pool}
+                            new = {''.join(sorted(c)) for c in keep}
+                            if norm_special in prev and norm_special not in new:
+                                special_result = label
+                    except:
+                        pass
+                    session_pool = keep
+                    st.write(f"Filter '{label}' removed {len(removed)} combos.")
+                    continue
             m_cond2 = re.search(r'seed contains\s*(\d+).*contains', logic, re.IGNORECASE)
             if m_cond2:
-                sd = int(m_cond2.group(1))
-                reqs = [int(x) for x in re.findall(r'(\d)', logic)]
+                try:
+                    sd = int(m_cond2.group(1))
+                except:
+                    sd = None
+                reqs = []
+                for m in re.findall(r'(\d)', logic):
+                    try: reqs.append(int(m))
+                    except: pass
                 seed_digits = [int(d) for d in seed if d.isdigit()]
-                keep, removed = apply_conditional_seed_contains(session_pool, seed_digits, sd, reqs)
-                if norm_special and special_result is None:
-                    if norm_special in [''.join(sorted(c)) for c in session_pool] and norm_special not in [''.join(sorted(c)) for c in keep]:
-                        special_result = label
-                session_pool = keep
-                st.write(f"Filter '{label}' removed {len(removed)} combos.")
-                continue
+                if sd is not None:
+                    keep, removed = apply_conditional_seed_contains(session_pool, seed_digits, sd, reqs)
+                    try:
+                        if norm_special and special_result is None:
+                            prev = {''.join(sorted(c)) for c in session_pool}
+                            new = {''.join(sorted(c)) for c in keep}
+                            if norm_special in prev and norm_special not in new:
+                                special_result = label
+                    except:
+                        pass
+                    session_pool = keep
+                    st.write(f"Filter '{label}' removed {len(removed)} combos.")
+                    continue
             st.warning(f"Could not automatically apply filter logic for: '{label}'")
     if special_combo:
-        if norm_special not in [''.join(sorted(c)) for c in combos_initial]:
-            st.sidebar.info(f"Special combo '{special_combo}' was NOT generated from seed.")
-        else:
-            if special_result:
-                st.sidebar.info(f"Special combo '{special_combo}' was eliminated by filter: {special_result}")
+        try:
+            initial_norms = {''.join(sorted(c)) for c in combos_initial}
+            if norm_special not in initial_norms:
+                st.sidebar.info(f"Special combo '{special_combo}' was NOT generated from seed.")
             else:
-                if any_filtered:
-                    st.sidebar.info(f"Special combo '{special_combo}' survived all selected manual filters.")
+                if special_result:
+                    st.sidebar.info(f"Special combo '{special_combo}' was eliminated by filter: {special_result}")
                 else:
-                    st.sidebar.info(f"Special combo '{special_combo}' would not be eliminated by any selected manual filters.")
+                    if any_filtered:
+                        st.sidebar.info(f"Special combo '{special_combo}' survived all selected manual filters.")
+                    else:
+                        st.sidebar.info(f"Special combo '{special_combo}' would not be eliminated by any selected manual filters.")
+        except:
+            pass
     st.write(f"**Remaining combos after manual filters:** {len(session_pool)}")
     if not any_filtered:
         st.info("No manual filters selected; Trap V3 will rank the unfiltered combos unless prevented.")
