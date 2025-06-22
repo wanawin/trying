@@ -134,9 +134,14 @@ def generate_combinations(seed, method="2-digit pair"):
 # ==============================
 
 # Debug: check sidebar active
-if st.sidebar:
-    st.sidebar.write("🔧 Debug: Sidebar is active")
-    st.sidebar.title("Settings")
+try:
+    # If sidebar attribute exists, write debug
+    if hasattr(st, 'sidebar'):
+        st.sidebar.write("🔧 Debug: Sidebar is active")
+        st.sidebar.title("Settings")
+except Exception:
+    pass
+
 # Main title
 st.title("DC-5 Midday Blind Predictor with External Aggressiveness Sorting and Custom Order")
 
@@ -274,6 +279,7 @@ if seed:
         if checked:
             any_filtered = True
             logic = pf.get('logic','')
+            # Match sum-range logic
             m_sum = re.search(r'between\s*(\d+)\s*and\s*(\d+)', logic, re.IGNORECASE)
             if m_sum:
                 low, high = int(m_sum.group(1)), int(m_sum.group(2))
@@ -290,6 +296,7 @@ if seed:
                 session_pool = keep
                 st.write(f"Filter '{label}' removed {len(removed)} combos.")
                 continue
+            # Match conditional seed contains logic
             m_cond2 = re.search(r'seed contains\s*(\d+).*contains', logic, re.IGNORECASE)
             if m_cond2:
                 sd = int(m_cond2.group(1))
