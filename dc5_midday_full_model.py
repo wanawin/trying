@@ -7,7 +7,7 @@ import pandas as pd
 # Helper functions for parsing manual filters
 # ==============================
 def strip_prefix(raw_name: str) -> str:
-    return re.sub(r'^\s*\d+[\.\)]\s*', '', raw_name).strip()
+    return re.sub(r'^\s*\d+[\.)]\s*', '', raw_name).strip()
 
 def normalize_name(raw_name: str) -> str:
     s = unicodedata.normalize('NFKC', raw_name)
@@ -16,7 +16,7 @@ def normalize_name(raw_name: str) -> str:
     s = s.replace('–', '-').replace('—', '-')
     s = s.replace('\u200B', '').replace('\u00A0', ' ')
     s = re.sub(r'\s+', ' ', s)
-    return s.strip()
+    return s.strip().lower()
 
 def parse_manual_filters_txt(raw_text: str):
     entries = []
@@ -129,31 +129,9 @@ def generate_combinations(seed, method="2-digit pair"):
     return sorted(combos)
 
 # ==============================
-# Load external aggressiveness mapping
-# ==============================
-def load_aggressiveness_map(csv_path="filter_ranking.csv"):
-    mapping = {}
-    if os.path.exists(csv_path):
-        try:
-            df = pd.read_csv(csv_path)
-            if 'filter' in df.columns and 'score' in df.columns:
-                for _, row in df.iterrows():
-                    norm = normalize_name(str(row['filter']))
-                    try: score = int(row['score'])
-                    except: continue
-                    mapping[norm] = score
-            else:
-                st.sidebar.error(f"CSV {csv_path} must have columns 'filter' and 'score'.")
-        except Exception as e:
-            st.sidebar.error(f"Failed loading aggressiveness CSV: {e}")
-    else:
-        st.sidebar.info(f"No aggressiveness CSV '{csv_path}' found; filters remain in file order.")
-    return mapping
-
-# ==============================
 # Streamlit App
 # ==============================
-st.title("DC-5 Midday Blind Predictor with External Aggressiveness Sorting")
+st.title("DC-5 Midday Blind Predictor with External Aggressiveness Sorting and Custom Order")
 # Sidebar inputs
 seed = st.sidebar.text_input("5-digit seed:")
 hot_digits = [d for d in st.sidebar.text_input("Hot digits (comma-separated):").replace(' ', '').split(',') if d]
@@ -170,7 +148,6 @@ if trap_uploaded is not None:
         with open('dc5_trapv3_model.py', 'wb') as f:
             f.write(content)
         st.sidebar.success("Saved Trap V3 model file.")
-        # Reload module if previously imported
         if 'dc5_trapv3_model' in globals(): importlib.reload(globals()['dc5_trapv3_model'])
     except Exception as e:
         st.sidebar.error(f"Failed saving Trap V3 model: {e}")
@@ -222,13 +199,48 @@ if raw_manual:
 else:
     st.write("No manual filters loaded.")
 
+# Sidebar: Upload aggressiveness ranking CSV
+agg_uploaded = st.sidebar.file_uploader("Upload aggressiveness CSV (columns 'filter' and 'score')", type=['csv'])
+
+# Load external aggressiveness mapping
+def load_aggressiveness_map(csv_path=None, uploaded_file=None):
+    mapping = {}
+    if uploaded_file is not None:
+        try:
+            df = pd.read_csv(uploaded_file)
+            if 'filter' in df.columns and 'score' in df.columns:
+                for _, row in df.iterrows():
+                    norm = normalize_name(str(row['filter']))
+                    try: score = int(row['score'])
+                    except: continue
+                    mapping[norm] = score
+                st.sidebar.success("Loaded aggressiveness mapping from uploaded CSV.")
+            else:
+                st.sidebar.error(f"Uploaded CSV must have columns 'filter' and 'score'.")
+        except Exception as e:
+            st.sidebar.error(f"Failed loading uploaded aggressiveness CSV: {e}")
+    elif csv_path and os.path.exists(csv_path):
+        try:
+            df = pd.read_csv(csv_path)
+            if 'filter' in df.columns and 'score' in df.columns:
+                for _, row in df.iterrows():
+                    norm = normalize_name(str(row['filter']))
+                    try: score = int(row['score'])
+                    except: continue
+                    mapping[norm] = score
+                st.sidebar.success(f"Loaded aggressiveness mapping from {csv_path}.")
+            else:
+                st.sidebar.error(f"CSV {csv_path} must have columns 'filter' and 'score'.")
+        except Exception as e:
+            st.sidebar.error(f"Failed loading aggressiveness CSV: {e}")
+    return mapping
+
 # Sort filters by external aggressiveness map
-agg_map = {}
 if parsed_entries:
-    agg_map = load_aggressiveness_map("filter_ranking.csv")
+    agg_map = load_aggressiveness_map(csv_path="filter_ranking.csv", uploaded_file=agg_uploaded)
     if agg_map:
-        parsed_entries.sort(key=lambda pf: agg_map.get(pf['name'], float('inf')))
-        st.sidebar.info("Manual filters sorted by external aggressiveness (least→most).")
+        parsed_entries.sort(key=lambda pf: agg_map.get(normalize_name(pf['name']), float('inf')))
+        st.sidebar.info("Manual filters sorted by external aggressiveness (least→most). If some filters missing scores they appear last.")
 
 # Apply filters
 session_pool = []
@@ -238,6 +250,7 @@ if seed:
     st.write(f"Generated {len(combos_initial)} combos before manual filters.")
     if parsed_entries:
         st.sidebar.markdown("### Manual Filter Selection")
+    any_filtered = False
     for idx, pf in enumerate(parsed_entries):
         label = pf['name'] or f"Filter {idx}"
         help_text = f"Type: {pf.get('type','')}\nLogic: {pf.get('logic','')}\nAction: {pf.get('action','')}"
@@ -246,6 +259,7 @@ if seed:
         except Exception:
             checked = st.sidebar.checkbox(f"Filter {idx}", key=f"filter_{idx}", help=help_text)
         if checked:
+            any_filtered = True
             logic = pf.get('logic','')
             m_sum = re.search(r'sum\s*<\s*(\d+)\s*or\s*>\s*(\d+)', logic, re.IGNORECASE)
             if m_sum:
@@ -263,10 +277,10 @@ if seed:
                 session_pool = keep
                 st.write(f"Filter '{label}' removed {len(removed)} combos.")
                 continue
-            m_cond = re.search(r'seed contains\s*(\d+).*contains neither\s*([\d,\s]+)', logic, re.IGNORECASE)
+            m_cond = re.search(r'seed contains\s*(\d+).*contains', logic, re.IGNORECASE)
             if m_cond:
                 sd = int(m_cond.group(1))
-                reqs = [int(x) for x in re.findall(r'(\d)', m_cond.group(2))]
+                reqs = [int(x) for x in re.findall(r'(\d)', logic)]
                 seed_digits = [int(d) for d in seed if d.isdigit()]
                 keep, removed = apply_conditional_seed_contains(session_pool, seed_digits, sd, reqs)
                 session_pool = keep
@@ -274,6 +288,8 @@ if seed:
                 continue
             st.warning(f"Could not automatically apply filter logic for: '{label}'")
     st.write(f"**Remaining combos after manual filters:** {len(session_pool)}")
+    if not any_filtered:
+        st.info("No manual filters selected; Trap V3 will rank the unfiltered combos unless prevented.")
     with st.expander("Show remaining combinations"):
         for c in session_pool:
             st.write(c)
@@ -281,7 +297,7 @@ if seed:
 # Trap V3 Ranking
 if enable_trap and seed and session_pool:
     try:
-        # Attempt to import or reload
+        st.write(f"Passing {len(session_pool)} combos into Trap V3.")
         if 'dc5_trapv3_model' in globals():
             trap_model = importlib.reload(globals()['dc5_trapv3_model'])
         else:
