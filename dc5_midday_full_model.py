@@ -94,21 +94,18 @@ def parse_manual_filters_txt(raw_text: str):
 # ==============================
 def seed_sum_matches_condition(seed_sum: int, condition_str: str) -> bool:
     s = condition_str.strip()
-    # <=N
     m = re.match(r'[≤<=]\s*(\d+)', s)
     if m:
         try:
             return seed_sum <= int(m.group(1))
         except:
             return False
-    # >=N or higher
     m = re.match(r'(?:≥|>=)\s*(\d+)\s*or\s*higher', s, re.IGNORECASE)
     if m:
         try:
             return seed_sum >= int(m.group(1))
         except:
             return False
-    # Range X-Y
     m = re.match(r'(\d+)\s*[–\-]\s*(\d+)', s)
     if m:
         try:
@@ -131,6 +128,14 @@ def apply_sum_range_filter(combos, min_sum, max_sum):
     removed = [c for c in combos if c not in keep]
     return keep, removed
 
+def apply_sum_eq_filter(combos, target_sum):
+    try:
+        keep = [c for c in combos if sum(int(d) for d in c) != target_sum]
+        removed = [c for c in combos if sum(int(d) for d in c) == target_sum]
+        return keep, removed
+    except:
+        return combos, []
+
 def apply_keep_sum_range_if_seed_sum(combos, seed_sum, min_sum, max_sum, seed_condition_str):
     try:
         if seed_sum_matches_condition(seed_sum, seed_condition_str):
@@ -145,11 +150,7 @@ def apply_conditional_seed_contains(combos, seed_digits, seed_digit, required_wi
         if seed_digit in seed_digits:
             keep, removed = [], []
             for c in combos:
-                found = False
-                for rw in required_winners:
-                    if str(rw) in c:
-                        found = True
-                        break
+                found = any(str(rw) in c for rw in required_winners)
                 if found:
                     keep.append(c)
                 else:
@@ -336,6 +337,7 @@ if seed:
         if checked:
             any_filtered = True
             logic = pf.get('logic','') or ''
+            # Sum range pattern
             m_sum = re.search(r'between\s*(\d+)\s*and\s*(\d+)', logic, re.IGNORECASE)
             if m_sum:
                 try:
@@ -361,6 +363,27 @@ if seed:
                     session_pool = keep
                     st.write(f"Filter '{label}' removed {len(removed)} combos.")
                     continue
+            # Sum equality pattern
+            m_eq = re.search(r'sum\s*=\s*(\d+)', logic, re.IGNORECASE)
+            if m_eq:
+                try:
+                    target = int(m_eq.group(1))
+                except:
+                    target = None
+                if target is not None:
+                    keep, removed = apply_sum_eq_filter(session_pool, target)
+                    try:
+                        if norm_special and special_result is None:
+                            prev = {''.join(sorted(c)) for c in session_pool}
+                            new = {''.join(sorted(c)) for c in keep}
+                            if norm_special in prev and norm_special not in new:
+                                special_result = label
+                    except:
+                        pass
+                    session_pool = keep
+                    st.write(f"Filter '{label}' removed {len(removed)} combos.")
+                    continue
+            # Conditional seed contains pattern
             m_cond2 = re.search(r'seed contains\s*(\d+).*contains', logic, re.IGNORECASE)
             if m_cond2:
                 try:
