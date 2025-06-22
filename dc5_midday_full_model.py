@@ -12,7 +12,6 @@ except Exception:
     pass
 st.sidebar.title("🔧 DC-5 Midday Settings & Debug")
 st.sidebar.write("✅ Sidebar initialization reached.")
-# Debug: confirm sidebar is active
 st.sidebar.write("🔍 Debug: Sidebar is active and UI components should appear.")
 
 # ==============================
@@ -308,16 +307,17 @@ if seed:
     special_combo = st.sidebar.text_input("Special combo check (enter 5-digit combo):")
     special_result = None
     norm_special = ''.join(sorted(str(special_combo).strip())) if special_combo else ''
-    # Precompute initial set for special comparisons
     prev_special_set = {''.join(sorted(c)) for c in session_pool}
     for idx, pf in enumerate(parsed_entries):
-        # Skip entries without logic/action to avoid non-filters
-        if not pf.get('logic') and not pf.get('action'):
+        raw_name = pf.get('name_raw','') or ''
+        logic = pf.get('logic','') or ''
+        action = pf.get('action','') or ''
+        # Only consider entries that look like filters
+        if not re.search(r'\b(sum|seed|eliminate|filter|contains|range)\b', raw_name.lower()) and not logic:
             continue
-        raw_label = pf.get('name_raw','').strip()
-        label_clean = re.sub(r"['\"\r\n]", " ", raw_label)
+        label_clean = re.sub(r"['\"\r\n]", " ", raw_name)
         label = label_clean[:50].strip() or f"Filter_{idx}"
-        help_text = f"Type: {pf.get('type','')}\nLogic: {pf.get('logic','')}\nAction: {pf.get('action','')}"
+        help_text = f"Type: {pf.get('type','')}\nLogic: {logic}\nAction: {action}"
         try:
             checked = st.sidebar.checkbox(label, key=f"filter_{idx}", help=help_text)
         except Exception:
@@ -325,12 +325,11 @@ if seed:
             continue
         if checked:
             any_filtered = True
-            logic = pf.get('logic','') or ''
-            name_raw = pf.get('name_raw','') or ''
-            norm_name = normalize_name(name_raw)
+            keep, removed = session_pool, []
+            norm_name = normalize_name(raw_name)
             norm_logic = normalize_name(logic)
-            # Equality sum filter
-            m_eq = re.match(r'^sum\s*=\s*(\d+)$', norm_name, re.IGNORECASE)
+            # 1) Sum = N
+            m_eq = re.search(r'sum\s*=\s*(\d+)', norm_name)
             if m_eq:
                 try:
                     target = int(m_eq.group(1))
@@ -338,23 +337,22 @@ if seed:
                 except:
                     keep, removed = session_pool, []
             else:
-                # Range via 'sum < X or > Y'
-                m_range_or = re.search(r'sum\s*[<≤]\s*(\d+)\s*or\s*[>≥]\s*(\d+)', norm_logic)
-                if m_range_or:
+                # 2) Sum < X or > Y patterns from raw_name or logic
+                m_range1 = re.search(r'sum\s*<\s*(\d+)\s*or\s*>\s*(\d+)', raw_name.lower() + ' ' + logic.lower())
+                m_range2 = re.search(r'sum\s*<\s*(\d+).*?>\s*(\d+)', raw_name.lower() + ' ' + logic.lower())
+                if m_range1 or m_range2:
+                    m = m_range1 or m_range2
                     try:
-                        low = int(m_range_or.group(1))
-                        high = int(m_range_or.group(2))
+                        low = int(m.group(1)); high = int(m.group(2))
                         keep, removed = apply_sum_range_filter(session_pool, low, high)
                     except:
                         keep, removed = session_pool, []
                 else:
-                    m_range = re.search(r'between\s*(\d+)\s*and\s*(\d+)', logic, re.IGNORECASE)
-                    if m_range:
+                    # 3) Sum between X and Y, optionally conditional on seed sum
+                    m_between = re.search(r'between\s*(\d+)\s*and\s*(\d+)', logic, re.IGNORECASE)
+                    if m_between:
                         try:
-                            low, high = int(m_range.group(1)), int(m_range.group(2))
-                        except:
-                            low, high = None, None
-                        if low is not None:
+                            low, high = int(m_between.group(1)), int(m_between.group(2))
                             seed_sum = sum(int(d) for d in seed if d.isdigit())
                             m_cond = re.search(r'if the seed sum is\s*([^\.]+)', logic, re.IGNORECASE)
                             if m_cond:
@@ -362,18 +360,21 @@ if seed:
                                 keep, removed = apply_keep_sum_range_if_seed_sum(session_pool, seed_sum, low, high, cond_str)
                             else:
                                 keep, removed = apply_sum_range_filter(session_pool, low, high)
+                        except:
+                            keep, removed = session_pool, []
                     else:
-                        m_cond = re.search(r'seed contains\s*(\d+).*contains', logic, re.IGNORECASE)
-                        if m_cond:
+                        # 4) Conditional seed contains patterns
+                        m_cond2 = re.search(r'seed contains\s*(\d).*contain\s*([0-9, ]+)', raw_name, re.IGNORECASE)
+                        if m_cond2:
                             try:
-                                sd = int(m_cond.group(1))
-                                reqs = [int(x) for x in re.findall(r'(\d)', logic)]
+                                sd = int(m_cond2.group(1))
+                                reqs_str = m_cond2.group(2)
+                                reqs = [int(x) for x in re.findall(r'(\d)', reqs_str)]
                                 seed_digits = [int(d) for d in seed if d.isdigit()]
                                 keep, removed = apply_conditional_seed_contains(session_pool, seed_digits, sd, reqs)
                             except:
                                 keep, removed = session_pool, []
                         else:
-                            # If cannot parse logic, skip applying
                             st.sidebar.warning(f"Could not apply logic for: '{label}'")
                             keep, removed = session_pool, []
             # Special combo check
@@ -387,7 +388,7 @@ if seed:
                 pass
             session_pool = keep
             st.write(f"Filter '{label}' removed {len(removed)} combos.")
-    # Special combo feedback
+    # special combo feedback
     if special_combo:
         try:
             if norm_special not in {''.join(sorted(c)) for c in combos_initial}:
