@@ -19,26 +19,18 @@ st.sidebar.write("🔍 Debug: Sidebar is active and UI components should appear.
 # Helper functions for parsing manual filters
 # ==============================
 def strip_prefix(raw_name: str) -> str:
-    # Remove leading numbering like "1. " or "2) "
     return re.sub(r'^\s*\d+[\.)]\s*', '', raw_name).strip()
 
 def normalize_name(raw_name: str) -> str:
     s = unicodedata.normalize('NFKC', raw_name)
-    # Normalize comparison symbols
     s = s.replace('≥', '>=').replace('≤', '<=').replace('\u2265', '>=').replace('\u2264', '<=')
     s = s.replace('→', '->').replace('\u2192', '->')
     s = s.replace('–', '-').replace('—', '-')
-    # Remove zero-width / non-breaking spaces
     s = s.replace('\u200B', '').replace('\u00A0', ' ')
-    # Collapse whitespace
     s = re.sub(r'\s+', ' ', s)
     return s.strip().lower()
 
 def parse_manual_filters_txt(raw_text: str):
-    """
-    Parse the manual filters file. Returns (entries, skipped_blocks).
-    Each entry: {'name': normalized lowercase, 'name_raw': original cleaned name, 'type', 'logic', 'action'}
-    """
     entries = []
     skipped = []
     text = raw_text.replace("\r\n", "\n").replace("\r", "\n")
@@ -342,11 +334,12 @@ if seed:
         if checked:
             any_filtered = True
             logic = pf.get('logic','') or ''
-            # Sum range pattern
-            m_sum = re.search(r'between\s*(\d+)\s*and\s*(\d+)', logic, re.IGNORECASE)
-            if m_sum:
+            # Sum range or equality patterns
+            m_range = re.search(r'between\s*(\d+)\s*and\s*(\d+)', logic, re.IGNORECASE)
+            m_eq = re.search(r'sum\s*=\s*(\d+)', pf.get('name_raw',''), re.IGNORECASE)
+            if m_range:
                 try:
-                    low, high = int(m_sum.group(1)), int(m_sum.group(2))
+                    low, high = int(m_range.group(1)), int(m_range.group(2))
                 except:
                     low, high = None, None
                 if low is not None:
@@ -357,7 +350,76 @@ if seed:
                         keep, removed = apply_keep_sum_range_if_seed_sum(session_pool, seed_sum, low, high, cond_str)
                     else:
                         keep, removed = apply_sum_range_filter(session_pool, low, high)
+            elif m_eq:
+                try:
+                    target = int(m_eq.group(1))
+                    keep, removed = apply_sum_eq_filter(session_pool, target)
+                except:
+                    keep, removed = session_pool, []
+            else:
+                # Try conditional seed contains
+                m_cond = re.search(r'seed contains\s*(\d+).*contains', logic, re.IGNORECASE)
+                if m_cond:
                     try:
-                        if norm_special and special_result is None:
-                            prev = {''.join(sorted(c)) for c in session_pool}
-                            new = {''
+                        sd = int(m_cond.group(1))
+                        reqs = [int(x) for x in re.findall(r'(\d)', logic)]
+                        seed_digits = [int(d) for d in seed if d.isdigit()]
+                        keep, removed = apply_conditional_seed_contains(session_pool, seed_digits, sd, reqs)
+                    except:
+                        keep, removed = session_pool, []
+                else:
+                    keep, removed = session_pool, []
+            # Special combo check
+            try:
+                if norm_special and special_result is None:
+                    prev_set = {''.join(sorted(c)) for c in session_pool}
+                    new_set = {''.join(sorted(c)) for c in keep}
+                    if norm_special in prev_set and norm_special not in new_set:
+                        special_result = label
+            except:
+                pass
+            session_pool = keep
+            st.write(f"Filter '{label}' removed {len(removed)} combos.")
+    # Special combo feedback
+    if special_combo:
+        try:
+            if norm_special not in {''.join(sorted(c)) for c in combos_initial}:
+                st.sidebar.info(f"Special combo '{special_combo}' was NOT generated from seed.")
+            else:
+                if special_result:
+                    st.sidebar.info(f"Special combo '{special_combo}' was eliminated by filter: {special_result}")
+                else:
+                    if any_filtered:
+                        st.sidebar.info(f"Special combo '{special_combo}' survived all selected manual filters.")
+                    else:
+                        st.sidebar.info(f"Special combo '{special_combo}' would not be eliminated by any selected manual filters.")
+        except:
+            pass
+    st.write(f"**Remaining combos after manual filters:** {len(session_pool)}")
+    if not any_filtered:
+        st.info("No manual filters selected; Trap V3 will rank the unfiltered combos unless prevented.")
+    with st.expander("Show remaining combinations"):
+        for c in session_pool:
+            st.write(c)
+
+# Trap V3 Ranking
+if enable_trap and seed and session_pool:
+    try:
+        st.write(f"Passing {len(session_pool)} combos into Trap V3.")
+        if 'dc5_trapv3_model' in globals():
+            trap_model = importlib.reload(globals()['dc5_trapv3_model'])
+        else:
+            import dc5_trapv3_model as trap_model
+        ranked = trap_model.rank_combinations(session_pool, str(seed))
+        st.write("## Trap V3 Ranking")
+        st.write("Top combos:")
+        for c in ranked[:20]: st.write(c)
+        if len(ranked) > 20:
+            with st.expander("Show all ranked combos"):
+                for c in ranked: st.write(c)
+    except ModuleNotFoundError:
+        st.error("Trap V3 model not found: please upload dc5_trapv3_model.py via the sidebar or place it in the app directory.")
+    except AttributeError:
+        st.error("Trap V3 model loaded but missing 'rank_combinations' function.")
+    except Exception as e:
+        st.error(f"Trap V3 ranking failed: {e}")
