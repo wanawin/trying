@@ -205,7 +205,7 @@ if trap_uploaded is not None:
     except Exception as e:
         st.sidebar.error(f"Failed saving Trap V3 model file: {e}")
 
-# Load manual filters
+# Load manual filters - only via user upload or single candidate to avoid merging issues
 uploaded = st.sidebar.file_uploader("Upload manual filters file (TXT)", type=['txt'])
 raw_manual = None
 if uploaded is not None:
@@ -215,26 +215,16 @@ if uploaded is not None:
     except Exception as e:
         st.sidebar.error(f"Failed reading uploaded file: {e}")
 else:
-    candidates = ["manual_filters_combined.txt", "manual_filters_full.txt", "manual_filters_degrouped.txt", "working_108_filters.txt"]
+    candidates = ["manual_filters_full.txt"]
     found = [fname for fname in candidates if os.path.exists(fname)]
-    if len(found) > 1:
-        contents = []
-        for fname in found:
-            try:
-                contents.append(open(fname, 'r', encoding='utf-8').read())
-                st.sidebar.info(f"Loaded manual filters from {fname}")
-            except Exception as e:
-                st.sidebar.error(f"Failed reading {fname}: {e}")
-        if contents:
-            raw_manual = "\n\n".join(contents)
-    elif len(found) == 1:
+    if len(found) == 1:
         try:
             raw_manual = open(found[0], 'r', encoding='utf-8').read()
             st.sidebar.info(f"Loaded manual filters from {found[0]}")
         except Exception as e:
             st.sidebar.error(f"Failed reading {found[0]}: {e}")
     else:
-        st.sidebar.warning("No manual filter file found. Upload a TXT.")
+        st.sidebar.warning("No manual filter file found or multiple candidates present. Upload a TXT manually.")
 
 parsed_entries = []
 skipped_blocks = []
@@ -255,13 +245,12 @@ if raw_manual:
     if st.sidebar.checkbox("Show normalized filter names for debugging"):
         st.write("#### Parsed Filter Names:")
         for idx, pf in enumerate(parsed_entries):
-            st.write(f"{idx}: RAW='{pf.get('name_raw','')}' -> NORM='{pf.get('name','')}' | Type: '{pf.get('type','')}'")
+            st.write(f"{idx}: RAW='{pf.get('name_raw','')}' -> NORM='{pf.get('name','')}' | Type: '{pf.get('type','')}' | Logic: '{pf.get('logic','')}'")
 else:
     st.write("No manual filters loaded.")
 
 # Aggressiveness CSV
 agg_uploaded = st.sidebar.file_uploader("Upload aggressiveness CSV (columns 'filter' and 'score')", type=['csv'])
-
 def load_aggressiveness_map(csv_path=None, uploaded_file=None):
     mapping = {}
     if uploaded_file is not None:
@@ -307,7 +296,7 @@ if parsed_entries:
         except Exception as e:
             st.sidebar.error(f"Error sorting filters: {e}")
 
-# Apply filters
+# Apply filters - only when explicitly selected
 session_pool = []
 if seed:
     combos_initial = generate_combinations(seed, method)
@@ -318,11 +307,13 @@ if seed:
     any_filtered = False
     special_combo = st.sidebar.text_input("Special combo check (enter 5-digit combo):")
     special_result = None
-    if special_combo:
-        norm_special = ''.join(sorted(str(special_combo).strip()))
-    else:
-        norm_special = ''
+    norm_special = ''.join(sorted(str(special_combo).strip())) if special_combo else ''
+    # Precompute initial set for special comparisons
+    prev_special_set = {''.join(sorted(c)) for c in session_pool}
     for idx, pf in enumerate(parsed_entries):
+        # Skip entries without logic/action to avoid non-filters
+        if not pf.get('logic') and not pf.get('action'):
+            continue
         raw_label = pf.get('name_raw','').strip()
         label_clean = re.sub(r"['\"\r\n]", " ", raw_label)
         label = label_clean[:50].strip() or f"Filter_{idx}"
@@ -337,8 +328,9 @@ if seed:
             logic = pf.get('logic','') or ''
             name_raw = pf.get('name_raw','') or ''
             norm_name = normalize_name(name_raw)
-            # Check equality pattern first
-            m_eq = re.search(r'^sum\s*=\s*(\d+)$', norm_name, re.IGNORECASE)
+            norm_logic = normalize_name(logic)
+            # Equality sum filter
+            m_eq = re.match(r'^sum\s*=\s*(\d+)$', norm_name, re.IGNORECASE)
             if m_eq:
                 try:
                     target = int(m_eq.group(1))
@@ -346,41 +338,51 @@ if seed:
                 except:
                     keep, removed = session_pool, []
             else:
-                # Range pattern: between X and Y
-                m_range = re.search(r'between\s*(\d+)\s*and\s*(\d+)', logic, re.IGNORECASE)
-                if m_range:
+                # Range via 'sum < X or > Y'
+                m_range_or = re.search(r'sum\s*[<≤]\s*(\d+)\s*or\s*[>≥]\s*(\d+)', norm_logic)
+                if m_range_or:
                     try:
-                        low, high = int(m_range.group(1)), int(m_range.group(2))
+                        low = int(m_range_or.group(1))
+                        high = int(m_range_or.group(2))
+                        keep, removed = apply_sum_range_filter(session_pool, low, high)
                     except:
-                        low, high = None, None
-                    if low is not None:
-                        seed_sum = sum(int(d) for d in seed if d.isdigit())
-                        m_cond = re.search(r'if the seed sum is\s*([^\.]+)', logic, re.IGNORECASE)
-                        if m_cond:
-                            cond_str = m_cond.group(1).strip()
-                            keep, removed = apply_keep_sum_range_if_seed_sum(session_pool, seed_sum, low, high, cond_str)
-                        else:
-                            keep, removed = apply_sum_range_filter(session_pool, low, high)
-                else:
-                    # conditional seed contains logic
-                    m_cond = re.search(r'seed contains\s*(\d+).*contains', logic, re.IGNORECASE)
-                    if m_cond:
-                        try:
-                            sd = int(m_cond.group(1))
-                            reqs = [int(x) for x in re.findall(r'(\d)', logic)]
-                            seed_digits = [int(d) for d in seed if d.isdigit()]
-                            keep, removed = apply_conditional_seed_contains(session_pool, seed_digits, sd, reqs)
-                        except:
-                            keep, removed = session_pool, []
-                    else:
                         keep, removed = session_pool, []
+                else:
+                    m_range = re.search(r'between\s*(\d+)\s*and\s*(\d+)', logic, re.IGNORECASE)
+                    if m_range:
+                        try:
+                            low, high = int(m_range.group(1)), int(m_range.group(2))
+                        except:
+                            low, high = None, None
+                        if low is not None:
+                            seed_sum = sum(int(d) for d in seed if d.isdigit())
+                            m_cond = re.search(r'if the seed sum is\s*([^\.]+)', logic, re.IGNORECASE)
+                            if m_cond:
+                                cond_str = m_cond.group(1).strip()
+                                keep, removed = apply_keep_sum_range_if_seed_sum(session_pool, seed_sum, low, high, cond_str)
+                            else:
+                                keep, removed = apply_sum_range_filter(session_pool, low, high)
+                    else:
+                        m_cond = re.search(r'seed contains\s*(\d+).*contains', logic, re.IGNORECASE)
+                        if m_cond:
+                            try:
+                                sd = int(m_cond.group(1))
+                                reqs = [int(x) for x in re.findall(r'(\d)', logic)]
+                                seed_digits = [int(d) for d in seed if d.isdigit()]
+                                keep, removed = apply_conditional_seed_contains(session_pool, seed_digits, sd, reqs)
+                            except:
+                                keep, removed = session_pool, []
+                        else:
+                            # If cannot parse logic, skip applying
+                            st.sidebar.warning(f"Could not apply logic for: '{label}'")
+                            keep, removed = session_pool, []
             # Special combo check
             try:
                 if norm_special and special_result is None:
-                    prev_set = {''.join(sorted(c)) for c in session_pool}
                     new_set = {''.join(sorted(c)) for c in keep}
-                    if norm_special in prev_set and norm_special not in new_set:
+                    if norm_special in prev_special_set and norm_special not in new_set:
                         special_result = label
+                    prev_special_set = new_set
             except:
                 pass
             session_pool = keep
