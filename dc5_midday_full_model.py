@@ -12,6 +12,8 @@ except Exception:
     pass
 st.sidebar.title("🔧 DC-5 Midday Settings & Debug")
 st.sidebar.write("✅ Sidebar initialization reached.")
+# Debug: confirm sidebar is active
+st.sidebar.write("🔍 Debug: Sidebar is active and UI components should appear.")
 
 # ==============================
 # Helper functions for parsing manual filters
@@ -194,6 +196,9 @@ cold_digits = [d for d in st.sidebar.text_input("Cold digits (comma-separated):"
 due_digits = [d for d in st.sidebar.text_input("Due digits (comma-separated):").replace(' ', '').split(',') if d]
 method = st.sidebar.selectbox("Generation Method:", ["1-digit", "2-digit pair"])
 enable_trap = st.sidebar.checkbox("Enable Trap V3 Ranking")
+
+# Debug point: confirm inputs appear
+st.sidebar.write(f"🔧 Debug: Seed input active, current seed='{seed}'")
 
 # Trap V3 uploader
 trap_uploaded = st.sidebar.file_uploader("Upload Trap V3 model file (dc5_trapv3_model.py)", type=['py'])
