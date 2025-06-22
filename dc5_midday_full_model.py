@@ -4,6 +4,16 @@ from itertools import product, combinations
 import pandas as pd
 
 # ==============================
+# Ensure wide layout and sidebar appears
+# ==============================
+try:
+    st.set_page_config(layout="wide")
+except Exception:
+    pass
+st.sidebar.title("🔧 DC-5 Midday Settings & Debug")
+st.sidebar.write("✅ Sidebar initialization reached.")
+
+# ==============================
 # Helper functions for parsing manual filters
 # ==============================
 def strip_prefix(raw_name: str) -> str:
@@ -174,14 +184,6 @@ def generate_combinations(seed, method="2-digit pair"):
 # ==============================
 # Streamlit App
 # ==============================
-
-# Ensure sidebar appears
-st.sidebar.markdown("## Settings")
-try:
-    st.sidebar.write("🔧 Debug: Sidebar is active")
-except Exception:
-    pass
-
 st.title("DC-5 Midday Blind Predictor with External Aggressiveness Sorting and Custom Order")
 
 # Sidebar inputs
