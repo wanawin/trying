@@ -1,0 +1,328 @@
+Seed Digit Exclusion 1
+Type: Manual
+Logic: Action: Eliminate if seed contains 2 and winner contains neither 5 nor 4.
+Action: Eliminate
+
+
+Sum Range Constraint 2
+Type: Manual
+Logic: Eliminate if sum <11 or >26
+Action: Eliminate
+
+
+Sum Range Constraint 3
+Type: Manual
+Logic: Eliminate if sum <12 or >20
+Action: Eliminate
+
+
+Sum Range Constraint 4
+Type: Manual
+Logic: Eliminate if sum <12 or >25
+Action: Eliminate
+
+
+Sum Range Constraint 5
+Type: Manual
+Logic: Eliminate if sum <14 or >22
+Action: Eliminate
+
+
+Sum Range Constraint 6
+Type: Manual
+Logic: Eliminate if sum <14 or >24
+Action: Eliminate
+
+
+Sum Range Constraint 7
+Type: Manual
+Logic: Eliminate if sum <16 or >25
+Action: Eliminate
+
+
+Sum Range Constraint 8
+Type: Manual
+Logic: Eliminate if sum <19 or >25
+Action: Eliminate
+
+
+Sum Range Constraint 9
+Type: Manual
+Logic: Eliminate if sum <20 or >28
+Action: Eliminate
+
+
+Seed Digit Inclusion Dependency 10
+Type: Manual
+Logic: Logic: If digit 2 appears in the seed, then the winner must contain either digit 5 or digit 4.
+Action: Eliminate
+
+
+Seed Sum Range 11
+Type: Manual
+Logic: Logic: Keep only combinations where the digit sum is between 11 and 26 (inclusive) if the seed sum is 17 or 18.
+Action: Eliminate if outside allowed sum range
+
+
+Seed Sum Range 12
+Type: Manual
+Logic: Logic: Keep only combinations where the digit sum is between 12 and 20 (inclusive) if the seed sum is 16.
+Action: Eliminate if outside allowed sum range
+
+
+Seed Sum Range 13
+Type: Manual
+Logic: Logic: Keep only combinations where the digit sum is between 12 and 25 (inclusive) if the seed sum is ≤12.
+Action: Eliminate if outside allowed sum range
+
+
+Seed Sum Range 14
+Type: Manual
+Logic: Logic: Keep only combinations where the digit sum is between 14 and 22 (inclusive) if the seed sum is 13–15.
+Action: Eliminate if outside allowed sum range
+
+
+Seed Sum Range 15
+Type: Manual
+Logic: Logic: Keep only combinations where the digit sum is between 14 and 24 (inclusive) if the seed sum is 19–21.
+Action: Eliminate if outside allowed sum range
+
+
+Seed Sum Range 16
+Type: Manual
+Logic: Logic: Keep only combinations where the digit sum is between 16 and 25 (inclusive) if the seed sum is 22–23.
+Action: Eliminate if outside allowed sum range
+
+
+Seed Sum Range 17
+Type: Manual
+Logic: Logic: Keep only combinations where the digit sum is between 19 and 25 (inclusive) if the seed sum is 24–25.
+Action: Eliminate if outside allowed sum range
+
+
+Seed Sum Range 18
+Type: Manual
+Logic: Logic: Keep only combinations where the digit sum is between 20 and 28 (inclusive) if the seed sum is 26 or higher.
+Action: Eliminate if outside allowed sum range
+
+
+Seed Digit Exclusion 19
+Type: Manual
+Logic: Logic: Eliminate if seed contains 2 and winner contains neither 5 nor 4
+Action: Eliminate
+
+
+Seed Digit Exclusion 20
+Type: Manual
+Logic: Logic: Eliminate if seed contains 1 and winner contains neither 2, 3, nor 4
+Action: Eliminate
+
+
+Seed Digit Exclusion 21
+Type: Manual
+Logic: Logic: Eliminate if seed contains 0 and winner contains neither 1, 2, nor 3
+Action: Eliminate
+
+
+Seed Digit Exclusion 22
+Type: Manual
+Logic: Logic: Eliminate if seed contains 3 and winner contains neither 5 nor 4
+Action: Eliminate
+
+
+Seed Digit Exclusion 23
+Type: Manual
+Logic: Logic: Eliminate if seed contains 9 and winner contains neither 3, 5, nor 1
+Action: Eliminate
+
+
+Seed Digit Exclusion 24
+Type: Manual
+Logic: Logic: Eliminate if seed contains 4 and winner contains neither 5 nor 6
+Action: Eliminate
+
+
+Seed Digit Exclusion 25
+Type: Manual
+Logic: Logic: Eliminate if seed contains 7 and winner contains neither 2 nor 1
+Action: Eliminate
+
+
+Seed Digit Exclusion 26
+Type: Manual
+Logic: Logic: Eliminate if seed contains 8 and winner contains neither 1, 3, nor 2
+Action: Eliminate
+
+
+Seed Digit Exclusion 27
+Type: Manual
+Logic: Logic: Eliminate if seed contains 6 and winner contains neither 3 nor 4
+Action: Eliminate
+
+
+Seed Digit Exclusion 28
+Type: Manual
+Logic: Logic: Eliminate if seed contains 5 and winner contains neither 2, 3, nor 1
+Action: Eliminate
+
+
+Seed Digit Exclusion 29
+Type: Manual
+Logic: Logic: Eliminate if seed contains 1 and winner contains neither 4 nor 2
+Action: Eliminate
+
+# -- Already includes filters: 8+9 & sum, Seed Sum→Result Sum, Mirror of Seed Pair
+# -- This version now supports selectable seed processing modes: 1-digit or 2-digit pair seed generation
+# ===============================
+# Manual Filter: Eliminate if seed contains '00' and sum < 11 or > 33
+# Manual Filter: Eliminate if seed contains both '0' and '5' and sum < 10 or > 30
+# Manual Filter: Eliminate if seed contains both '0' and '6' and sum < 8 or > 29
+# Manual Filter: Eliminate if seed contains both '0' and '7' and sum < 8 or > 28
+# Manual Filters: Seed First Digit vs Sum Last Digit
+# Seed Combo Generation Settings
+# Trap V3 Filter Logic (With Seed Pair and Mirror Logic)
+1. Cold Digit Trap — Requires at least 1 digit from the 4 coldest digits.
+10. Quint Filter — All 5 digits identical.
+11. Quad Filter — 4 digits identical.
+12. Triple Filter — 3 digits identical.
+13. Mild Double-Double Filter — Exactly 4 digits: one twice, two once.
+14. No 2-Digit Internal Mirror Pairs — Eliminates combos with digit and its mirror.
+15. Prime Digit Filter — Eliminates combos with ≥2 prime digits (2,3,5,7).
+16. Sum Category Transition Filter — Very Low to Mid.
+17. Sum Category Transition Filter — Mid to Very Low.
+18. Sum Category Transition Filter — Low to Mid.
+19. Mirror Sum = Combo Sum — Eliminates combos whose digit sum matches seed mirror sum.
+2. Mirror Count = 0 — Eliminate combos that do not contain any mirror digit from the seed.
+20. Combo Contains Last Digit of Mirror Sum — Manual filter.
+21. Seed Contains 0 → Winner must contain 1, 2, or 3.
+22. Seed Contains 1 → Winner must contain 2, 3, or 4.
+23. Seed Contains 2 → Winner must contain 4 or 5.
+24. V-Trac: All Digits Same Group — Eliminates if all digits share the same V-Trac group.
+25. V-Trac: Only 2 Groups Present — Eliminates if only 2 V-Trac groups used.
+26. V-Trac: All 5 Groups Present — Eliminates if all 5 V-Trac groups used.
+27. V-Trac: All Seed V-Tracs Present — Eliminates if all V-Trac groups from seed are in combo.
+28. V-Trac: None of Seed V-Tracs Present — Eliminates if no seed V-Tracs in combo.
+29. Position 1 Cannot Be 4 or 7 — Manual trap filter.
+3. Repeating Digit Filter (3+ Shared & Sum < 25) — For Singles only.
+30. Position 3 Cannot Be 3 or 9 — Manual trap filter.
+31. Position 4 Cannot Be 4 — Manual trap filter.
+32. Position 5 Cannot Be 4 — Manual trap filter.
+33. Eliminate if Digit 4 Repeats.
+34. Eliminate if Digit 7 Repeats.
+35. Seed Contains 00 and Sum <11 or >33.
+36. Seed Contains 02 and Sum <7 or >26.
+37. Seed Contains 03 and Sum <13 or >35.
+38. Seed Contains 04 and Sum <10 or >29.
+39. Seed Contains 05 and Sum <10 or >30.
+4. Sum > 40 — Eliminates combos where digit sum is over 40.
+40. Seed Contains 06 and Sum <8 or >29.
+41. Seed Contains 07 and Sum <8 or >28.
+42. Shared Digits vs Sum Thresholds — Grouped Set (Filters #1–4, 36–40, 71–79, 106–175)
+5. Digit Spread < 4 — Eliminates combos with low spread between digits.
+6. High-End Digit Limit — Eliminates if 2 or more digits ≥ 8.
+7. All Low Digits (0–3) — Eliminates if all 5 digits are from 0 to 3.
+8. Consecutive Digits ≥ 4 — Eliminates clusters of consecutive digits.
+9. Double-Doubles Only — Eliminates combos with exactly 3 unique digits, two of which appear twice.
+FILTER LOGIC CODE
+Seed Contains 2 → Winner Must Contain 5 or 4
+Seed Sum = 13–15
+Seed Sum = 16
+Seed Sum = 17–18
+Seed Sum = 19–21
+Seed Sum = 22–23
+Seed Sum = 24–25
+Seed Sum ≤12
+Seed Sum ≥26
+Type: Manual
+all_digits = list(range(10))
+combo = tuple(sorted((a, b, *c)))
+combo = tuple(sorted((d, *c)))
+combos = set()
+combos.add(combo)
+def filter_seed00_and_sum_range(combo_list, seed):
+def filter_seed05_and_sum_range(combo_list, seed):
+def filter_seed06_and_sum_range(combo_list, seed):
+def filter_seed07_and_sum_range(combo_list, seed):
+def filter_seed3_last0(combo_list, seed_sum):
+def filter_seed3_last5(combo_list, seed_sum):
+def filter_seed3_last7(combo_list, seed_sum):
+def filter_seed3_last9(combo_list, seed_sum):
+def generate_combos_from_seed(seed_digits, mode='pair'):
+elif mode == 'pair':
+else:
+for a, b in combinations(seed_digits, 2):
+for c in product(all_digits, repeat=3):
+for c in product(all_digits, repeat=4):
+for combo in combo_list:
+for d in seed_digits:
+from itertools import combinations, permutations, product
+if '0' in seed_digits and '5' in seed_digits:
+if '0' in seed_digits and '6' in seed_digits:
+if '0' in seed_digits and '7' in seed_digits:
+if int(str(seed_sum)[0]) == 3:
+if mode == 'digit':
+if seed_str.count('0') >= 2:
+if sum(int(d) for d in combo) % 10 == 0:
+if sum(int(d) for d in combo) % 10 == 5:
+if sum(int(d) for d in combo) % 10 == 7:
+if sum(int(d) for d in combo) % 10 == 9:
+if total < 10 or total > 30:
+if total < 11 or total > 33:
+if total < 8 or total > 28:
+if total < 8 or total > 29:
+keep = combo_list
+keep, removed = [], []
+keep.append(combo)
+removed.append(combo)
+return ["".join(map(str, c)) for c in combos]
+return keep, removed
+seed_digits = set(str(d) for d in seed)
+seed_str = "".join(str(d) for d in seed)
+total = sum(int(d) for d in combo)
+trap v3 code
+Type: Manual
+Category: Sum Range
+Logic: Eliminate if digit sum is <11 or >26
+Type: Manual
+Category: Sum Range
+Logic: Eliminate if digit sum is <12 or >20
+Type: Manual
+Category: Sum Range
+Logic: Eliminate if digit sum is <12 or >25
+Type: Manual
+Category: Sum Range
+Logic: Eliminate if digit sum is <14 or >22
+Type: Manual
+Category: Sum Range
+Logic: Eliminate if digit sum is <14 or >24
+Type: Manual
+Category: Sum Range
+Logic: Eliminate if digit sum is <16 or >25
+Type: Manual
+Category: Sum Range
+Logic: Eliminate if digit sum is <19 or >25
+Type: Manual
+Category: Sum Range
+Logic: Eliminate if digit sum is <20 or >28
+Type: Manual
+Category: Conditional Elimination
+Type: Manual
+Category: Conditional Elimination
+Type: Manual
+Category: Conditional Elimination
+Type: Manual
+Category: Conditional Elimination
+Type: Manual
+Category: Conditional Elimination
+Type: Manual
+Category: Conditional Elimination
+Type: Manual
+Category: Conditional Elimination
+Type: Manual
+Category: Conditional Elimination
+Type: Manual
+Category: Conditional Elimination
+Type: Manual
+Category: Conditional Elimination
+Type: Manual
+Category: Conditional Elimination
