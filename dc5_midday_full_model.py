@@ -324,7 +324,8 @@ if seed:
         norm_special = ''
     for idx, pf in enumerate(parsed_entries):
         raw_label = pf.get('name_raw','').strip()
-        label = re.sub(r"['\"\r\n]", " ", raw_label)[:50].strip() or f"Filter_{idx}"
+        label_clean = re.sub(r"['\"\r\n]", " ", raw_label)
+        label = label_clean[:50].strip() or f"Filter_{idx}"
         help_text = f"Type: {pf.get('type','')}\nLogic: {pf.get('logic','')}\nAction: {pf.get('action','')}"
         try:
             checked = st.sidebar.checkbox(label, key=f"filter_{idx}", help=help_text)
@@ -334,41 +335,45 @@ if seed:
         if checked:
             any_filtered = True
             logic = pf.get('logic','') or ''
-            # Sum range or equality patterns
-            m_range = re.search(r'between\s*(\d+)\s*and\s*(\d+)', logic, re.IGNORECASE)
-            m_eq = re.search(r'sum\s*=\s*(\d+)', pf.get('name_raw',''), re.IGNORECASE)
-            if m_range:
-                try:
-                    low, high = int(m_range.group(1)), int(m_range.group(2))
-                except:
-                    low, high = None, None
-                if low is not None:
-                    seed_sum = sum(int(d) for d in seed if d.isdigit())
-                    m_cond = re.search(r'if the seed sum is\s*([^\.]+)', logic, re.IGNORECASE)
-                    if m_cond:
-                        cond_str = m_cond.group(1).strip()
-                        keep, removed = apply_keep_sum_range_if_seed_sum(session_pool, seed_sum, low, high, cond_str)
-                    else:
-                        keep, removed = apply_sum_range_filter(session_pool, low, high)
-            elif m_eq:
+            name_raw = pf.get('name_raw','') or ''
+            norm_name = normalize_name(name_raw)
+            # Check equality pattern first
+            m_eq = re.search(r'^sum\s*=\s*(\d+)$', norm_name, re.IGNORECASE)
+            if m_eq:
                 try:
                     target = int(m_eq.group(1))
                     keep, removed = apply_sum_eq_filter(session_pool, target)
                 except:
                     keep, removed = session_pool, []
             else:
-                # Try conditional seed contains
-                m_cond = re.search(r'seed contains\s*(\d+).*contains', logic, re.IGNORECASE)
-                if m_cond:
+                # Range pattern: between X and Y
+                m_range = re.search(r'between\s*(\d+)\s*and\s*(\d+)', logic, re.IGNORECASE)
+                if m_range:
                     try:
-                        sd = int(m_cond.group(1))
-                        reqs = [int(x) for x in re.findall(r'(\d)', logic)]
-                        seed_digits = [int(d) for d in seed if d.isdigit()]
-                        keep, removed = apply_conditional_seed_contains(session_pool, seed_digits, sd, reqs)
+                        low, high = int(m_range.group(1)), int(m_range.group(2))
                     except:
-                        keep, removed = session_pool, []
+                        low, high = None, None
+                    if low is not None:
+                        seed_sum = sum(int(d) for d in seed if d.isdigit())
+                        m_cond = re.search(r'if the seed sum is\s*([^\.]+)', logic, re.IGNORECASE)
+                        if m_cond:
+                            cond_str = m_cond.group(1).strip()
+                            keep, removed = apply_keep_sum_range_if_seed_sum(session_pool, seed_sum, low, high, cond_str)
+                        else:
+                            keep, removed = apply_sum_range_filter(session_pool, low, high)
                 else:
-                    keep, removed = session_pool, []
+                    # conditional seed contains logic
+                    m_cond = re.search(r'seed contains\s*(\d+).*contains', logic, re.IGNORECASE)
+                    if m_cond:
+                        try:
+                            sd = int(m_cond.group(1))
+                            reqs = [int(x) for x in re.findall(r'(\d)', logic)]
+                            seed_digits = [int(d) for d in seed if d.isdigit()]
+                            keep, removed = apply_conditional_seed_contains(session_pool, seed_digits, sd, reqs)
+                        except:
+                            keep, removed = session_pool, []
+                    else:
+                        keep, removed = session_pool, []
             # Special combo check
             try:
                 if norm_special and special_result is None:
