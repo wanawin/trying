@@ -202,7 +202,6 @@ else:
 # Sidebar: Upload aggressiveness ranking CSV
 agg_uploaded = st.sidebar.file_uploader("Upload aggressiveness CSV (columns 'filter' and 'score')", type=['csv'])
 
-# Load external aggressiveness mapping
 def load_aggressiveness_map(csv_path=None, uploaded_file=None):
     mapping = {}
     if uploaded_file is not None:
@@ -251,6 +250,14 @@ if seed:
     if parsed_entries:
         st.sidebar.markdown("### Manual Filter Selection")
     any_filtered = False
+    # Special combo check: input
+    special_combo = st.sidebar.text_input("Special combo check (enter 5-digit combo):")
+    special_result = None
+    # Normalize special combo to sorted form for comparison
+    if special_combo:
+        norm_special = ''.join(sorted(str(special_combo).strip()))
+    else:
+        norm_special = ''
     for idx, pf in enumerate(parsed_entries):
         label = pf['name'] or f"Filter {idx}"
         help_text = f"Type: {pf.get('type','')}\nLogic: {pf.get('logic','')}\nAction: {pf.get('action','')}"
@@ -265,6 +272,10 @@ if seed:
             if m_sum:
                 low, high = int(m_sum.group(1)), int(m_sum.group(2))
                 keep, removed = apply_sum_range_filter(session_pool, low, high)
+                # Special check: compare normalized
+                if norm_special and special_result is None:
+                    if norm_special in [''.join(sorted(c)) for c in session_pool] and norm_special not in [''.join(sorted(c)) for c in keep]:
+                        special_result = label
                 session_pool = keep
                 st.write(f"Filter '{label}' removed {len(removed)} combos.")
                 continue
@@ -274,6 +285,9 @@ if seed:
                 seed_cond = m_keep.group(3).strip()
                 seed_sum = sum(int(d) for d in seed if d.isdigit())
                 keep, removed = apply_keep_sum_range_if_seed_sum(session_pool, seed_sum, low, high, seed_cond)
+                if norm_special and special_result is None:
+                    if norm_special in [''.join(sorted(c)) for c in session_pool] and norm_special not in [''.join(sorted(c)) for c in keep]:
+                        special_result = label
                 session_pool = keep
                 st.write(f"Filter '{label}' removed {len(removed)} combos.")
                 continue
@@ -283,10 +297,25 @@ if seed:
                 reqs = [int(x) for x in re.findall(r'(\d)', logic)]
                 seed_digits = [int(d) for d in seed if d.isdigit()]
                 keep, removed = apply_conditional_seed_contains(session_pool, seed_digits, sd, reqs)
+                if norm_special and special_result is None:
+                    if norm_special in [''.join(sorted(c)) for c in session_pool] and norm_special not in [''.join(sorted(c)) for c in keep]:
+                        special_result = label
                 session_pool = keep
                 st.write(f"Filter '{label}' removed {len(removed)} combos.")
                 continue
             st.warning(f"Could not automatically apply filter logic for: '{label}'")
+    # Special combo check output
+    if special_combo:
+        if norm_special not in [''.join(sorted(c)) for c in combos_initial]:
+            st.sidebar.info(f"Special combo '{special_combo}' was NOT generated from seed.")
+        else:
+            if special_result:
+                st.sidebar.info(f"Special combo '{special_combo}' was eliminated by filter: {special_result}")
+            else:
+                if any_filtered:
+                    st.sidebar.info(f"Special combo '{special_combo}' survived all selected manual filters.")
+                else:
+                    st.sidebar.info(f"Special combo '{special_combo}' would not be eliminated by any selected manual filters.")
     st.write(f"**Remaining combos after manual filters:** {len(session_pool)}")
     if not any_filtered:
         st.info("No manual filters selected; Trap V3 will rank the unfiltered combos unless prevented.")
