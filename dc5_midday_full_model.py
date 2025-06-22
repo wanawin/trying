@@ -135,6 +135,7 @@ def generate_combinations(seed, method="2-digit pair"):
 
 # Debug: check sidebar active
 st.sidebar.write("🔧 Debug: Sidebar is active")
+st.sidebar.title("Settings")
 
 st.title("DC-5 Midday Blind Predictor with External Aggressiveness Sorting and Custom Order")
 
@@ -257,6 +258,7 @@ if seed:
         st.sidebar.markdown("### Manual Filter Selection")
     any_filtered = False
     special_combo = st.sidebar.text_input("Special combo check (enter 5-digit combo):")
+    special_result = None
     if special_combo:
         norm_special = ''.join(sorted(str(special_combo).strip()))
     else:
@@ -275,7 +277,6 @@ if seed:
             if m_sum:
                 low, high = int(m_sum.group(1)), int(m_sum.group(2))
                 seed_sum = sum(int(d) for d in seed if d.isdigit())
-                # If conditional on seed sum in logic
                 m_cond = re.search(r'if the seed sum is\s*([^\.]+)', logic, re.IGNORECASE)
                 if m_cond:
                     cond_str = m_cond.group(1).strip()
@@ -332,11 +333,4 @@ if enable_trap and seed and session_pool:
         st.write("Top combos:")
         for c in ranked[:20]: st.write(c)
         if len(ranked) > 20:
-            with st.expander("Show all ranked combos"):
-                for c in ranked: st.write(c)
-    except ModuleNotFoundError:
-        st.error("Trap V3 model not found: please upload dc5_trapv3_model.py via the sidebar or place it in the app directory.")
-    except AttributeError:
-        st.error("Trap V3 model loaded but missing 'rank_combinations' function.")
-    except Exception as e:
-        st.error(f"Trap V3 ranking failed: {e}")
+            with st.expander("Show all ranked combo
