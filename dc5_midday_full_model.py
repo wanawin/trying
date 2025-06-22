@@ -131,7 +131,7 @@ def generate_combinations(seed, method="2-digit pair"):
 # ==============================
 # Streamlit App
 # ==============================
-st.title("DC-5 Midday Blind Predictor with External Aggressiveness Sorting and Custom Order")
+st.title st.sidebar.write("🔧 Debug: Sidebar is active")("DC-5 Midday Blind Predictor with External Aggressiveness Sorting and Custom Order")
 # Sidebar inputs
 seed = st.sidebar.text_input("5-digit seed:")
 hot_digits = [d for d in st.sidebar.text_input("Hot digits (comma-separated):").replace(' ', '').split(',') if d]
