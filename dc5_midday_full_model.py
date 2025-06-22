@@ -219,7 +219,7 @@ def load_aggressiveness_map(csv_path=None, uploaded_file=None):
             else:
                 st.sidebar.error(f"Uploaded CSV must have columns 'filter' and 'score'.")
         except Exception as e:
-            st.sidebar.error(f"Failed loading uploaded aggressiveness CSV: {e}")
+            st.sidebar.error(f"Failed loading aggressiveness CSV: {e}")
     elif csv_path and os.path.exists(csv_path):
         try:
             df = pd.read_csv(csv_path)
@@ -252,10 +252,8 @@ if seed:
     if parsed_entries:
         st.sidebar.markdown("### Manual Filter Selection")
     any_filtered = False
-    # Special combo check: input
     special_combo = st.sidebar.text_input("Special combo check (enter 5-digit combo):")
     special_result = None
-    # Normalize special combo to sorted form for comparison
     if special_combo:
         norm_special = ''.join(sorted(str(special_combo).strip()))
     else:
@@ -270,78 +268,5 @@ if seed:
         if checked:
             any_filtered = True
             logic = pf.get('logic','')
-            m_sum = re.search(r'sum\s*<\s*(\d+)\s*or\s*>\s*(\d+)', logic, re.IGNORECASE)
-            if m_sum:
-                low, high = int(m_sum.group(1)), int(m_sum.group(2))
-                keep, removed = apply_sum_range_filter(session_pool, low, high)
-                if norm_special and special_result is None:
-                    if norm_special in [''.join(sorted(c)) for c in session_pool] and norm_special not in [''.join(sorted(c)) for c in keep]:
-                        special_result = label
-                session_pool = keep
-                st.write(f"Filter '{label}' removed {len(removed)} combos.")
-                continue
-            m_keep = re.search(r'between\s*(\d+)\s*and\s*(\d+).*if the seed sum is\s*([^\.]+)', logic, re.IGNORECASE)
-            if m_keep:
-                low, high = int(m_keep.group(1)), int(m_keep.group(2))
-                seed_cond = m_keep.group(3).strip()
-                seed_sum = sum(int(d) for d in seed if d.isdigit())
-                keep, removed = apply_keep_sum_range_if_seed_sum(session_pool, seed_sum, low, high, seed_cond)
-                if norm_special and special_result is None:
-                    if norm_special in [''.join(sorted(c)) for c in session_pool] and norm_special not in [''.join(sorted(c)) for c in keep]:
-                        special_result = label
-                session_pool = keep
-                st.write(f"Filter '{label}' removed {len(removed)} combos.")
-                continue
-            m_cond = re.search(r'seed contains\s*(\d+).*contains', logic, re.IGNORECASE)
-            if m_cond:
-                sd = int(m_cond.group(1))
-                reqs = [int(x) for x in re.findall(r'(\d)', logic)]
-                seed_digits = [int(d) for d in seed if d.isdigit()]
-                keep, removed = apply_conditional_seed_contains(session_pool, seed_digits, sd, reqs)
-                if norm_special and special_result is None:
-                    if norm_special in [''.join(sorted(c)) for c in session_pool] and norm_special not in [''.join(sorted(c)) for c in keep]:
-                        special_result = label
-                session_pool = keep
-                st.write(f"Filter '{label}' removed {len(removed)} combos.")
-                continue
-            st.warning(f"Could not automatically apply filter logic for: '{label}'")
-    # Special combo check output
-    if special_combo:
-        if norm_special not in [''.join(sorted(c)) for c in combos_initial]:
-            st.sidebar.info(f"Special combo '{special_combo}' was NOT generated from seed.")
-        else:
-            if special_result:
-                st.sidebar.info(f"Special combo '{special_combo}' was eliminated by filter: {special_result}")
-            else:
-                if any_filtered:
-                    st.sidebar.info(f"Special combo '{special_combo}' survived all selected manual filters.")
-                else:
-                    st.sidebar.info(f"Special combo '{special_combo}' would not be eliminated by any selected manual filters.")
-    st.write(f"**Remaining combos after manual filters:** {len(session_pool)}")
-    if not any_filtered:
-        st.info("No manual filters selected; Trap V3 will rank the unfiltered combos unless prevented.")
-    with st.expander("Show remaining combinations"):
-        for c in session_pool:
-            st.write(c)
-
-# Trap V3 Ranking
-if enable_trap and seed and session_pool:
-    try:
-        st.write(f"Passing {len(session_pool)} combos into Trap V3.")
-        if 'dc5_trapv3_model' in globals():
-            trap_model = importlib.reload(globals()['dc5_trapv3_model'])
-        else:
-            import dc5_trapv3_model as trap_model
-        ranked = trap_model.rank_combinations(session_pool, str(seed))
-        st.write("## Trap V3 Ranking")
-        st.write("Top combos:")
-        for c in ranked[:20]: st.write(c)
-        if len(ranked) > 20:
-            with st.expander("Show all ranked combos"):
-                for c in ranked: st.write(c)
-    except ModuleNotFoundError:
-        st.error("Trap V3 model not found: please upload dc5_trapv3_model.py via the sidebar or place it in the app directory.")
-    except AttributeError:
-        st.error("Trap V3 model loaded but missing 'rank_combinations' function.")
-    except Exception as e:
-        st.error(f"Trap V3 ranking failed: {e}")
+            m_sum = re.search(r'sum\s*<\s*(\d+)"`
+]}]}
