@@ -110,7 +110,7 @@ def apply_conditional_seed_contains(combos, seed_digits, seed_digit, required_wi
     return combos, []
 
 # ==============================
-# Generate combinations placeholder
+# Generate combinations
 # ==============================
 def generate_combinations(seed, method="2-digit pair"):
     all_digits = '0123456789'
@@ -134,9 +134,10 @@ def generate_combinations(seed, method="2-digit pair"):
 # ==============================
 
 # Debug: check sidebar active
-st.sidebar.write("🔧 Debug: Sidebar is active")
-st.sidebar.title("Settings")
-
+if st.sidebar:
+    st.sidebar.write("🔧 Debug: Sidebar is active")
+    st.sidebar.title("Settings")
+# Main title
 st.title("DC-5 Midday Blind Predictor with External Aggressiveness Sorting and Custom Order")
 
 # Sidebar inputs
@@ -333,4 +334,11 @@ if enable_trap and seed and session_pool:
         st.write("Top combos:")
         for c in ranked[:20]: st.write(c)
         if len(ranked) > 20:
-            with st.expander("Show all ranked combo
+            with st.expander("Show all ranked combos"):
+                for c in ranked: st.write(c)
+    except ModuleNotFoundError:
+        st.error("Trap V3 model not found: please upload dc5_trapv3_model.py via the sidebar or place it in the app directory.")
+    except AttributeError:
+        st.error("Trap V3 model loaded but missing 'rank_combinations' function.")
+    except Exception as e:
+        st.error(f"Trap V3 ranking failed: {e}")
